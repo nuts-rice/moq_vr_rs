@@ -1,0 +1,9 @@
+[package]
+name = "moq_vr_rs"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ffmpeg = "0.3.0"
+moq-lite = "0.15.15"
+moq-media = "0.0.1"
