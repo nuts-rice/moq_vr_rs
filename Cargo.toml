@@ -4,6 +4,14 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ffmpeg = "0.3.0"
-moq-lite = "0.15.15"
+anyhow = "1.0.102"
+bytes = "1.11.1"
+hang = "0.15.8"
+moq-lite = { version = "0.15.15", features = ["serde"] }
 moq-media = "0.0.1"
+moq-native = "0.13.13"
+openh264 = "0.9.3"
+serde = { version = "1.0.228", features = ["derive"] }
+tokio = { version = "1.52.1", features = ["rt-multi-thread", "tokio-macros"] }
+tracing = "0.1.44"
+url = "2.5.8"
