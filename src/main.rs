@@ -1,7 +1,8 @@
 
 
 mod controls; 
-
+mod video;
+use video::run_video_broadcast;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     moq_native::Log::new(tracing::Level::DEBUG).init();
@@ -10,7 +11,8 @@ async fn main() -> anyhow::Result<()> {
 
     tokio::select! {
         res = run_session(origin.consume()) => res,
-        res = run_heartbeat_broadcast(origin) => res,
+        res = run_heartbeat_broadcast(origin.clone()) => res,
+        res = run_video_broadcast(origin) => res,
     }
     
 }
