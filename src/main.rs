@@ -1,7 +1,12 @@
 
 
+mod bridge;
+use bridge::{bridge::run_bridge};
 mod controls; 
 mod video;
+
+
+use controls::run_pose_broadcast;
 use video::run_video_broadcast;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -12,7 +17,9 @@ async fn main() -> anyhow::Result<()> {
     tokio::select! {
         res = run_session(origin.consume()) => res,
         res = run_heartbeat_broadcast(origin.clone()) => res,
-        res = run_video_broadcast(origin) => res,
+        res = run_video_broadcast(origin.clone()) => res,
+        res = run_pose_broadcast("local", origin) => res,
+        res = run_bridge("0.0.0.0:9000", "http://localhost:4443/anon") => res,
     }
     
 }
@@ -36,7 +43,7 @@ async fn run_heartbeat_broadcast(origin: moq_lite::OriginProducer) -> anyhow::Re
 
     let mut track = broadcast.create_track(moq_lite::Track::new("heartbeat"))?;
 
-    origin.publish_broadcast("", broadcast.consume());
+    origin.publish_broadcast("heartbeat", broadcast.consume());
 
     let mut group = track.append_group()?;
 
