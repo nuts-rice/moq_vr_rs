@@ -14,9 +14,10 @@ async fn main() -> anyhow::Result<()> {
 
     let origin = moq_lite::Origin::produce();
 
+    tokio::spawn(run_heartbeat_broadcast(origin.clone()));
+
     tokio::select! {
         res = run_session(origin.consume()) => res,
-        res = run_heartbeat_broadcast(origin.clone()) => res,
         res = run_video_broadcast(origin.clone()) => res,
         res = run_pose_broadcast("local", origin) => res,
         res = run_bridge("0.0.0.0:9000", "http://localhost:4443/anon") => res,
