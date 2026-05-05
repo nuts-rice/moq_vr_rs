@@ -5,45 +5,41 @@ mod video;
 
 use controls::run_pose_broadcast;
 use video::run_video_broadcast;
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let config = moq_native::Log::new(tracing::Level::DEBUG).init();
+    moq_native::Log::new(tracing::Level::DEBUG).init();
 
+    let config = Config::load()?;
     let origin = moq_lite::Origin::produce();
 
     tokio::spawn(run_heartbeat_broadcast(origin.clone()));
 
-    let config = Config::load()?;
+    let relay_url = config.relay.url.clone();
+    let viewer_id = config.pose.viewer_id.clone();
+    let bind = config.bridge.bind.clone();
+
     tokio::select! {
-        res = run_session(origin.consume()) => res,
+        res = run_session(&relay_url, origin.consume()) => res,
         res = run_video_broadcast(origin.clone(), config.clone()) => res,
-        res = run_pose_broadcast("local", origin.clone()) => res,
-        res = run_bridge("0.0.0.0:9000", origin, config) => res,
+        res = run_pose_broadcast(&viewer_id, origin.clone()) => res,
+        res = run_bridge(&bind, origin, config) => res,
     }
 }
 
-async fn run_session(origin: moq_lite::OriginConsumer) -> anyhow::Result<()> {
+async fn run_session(relay_url: &str, origin: moq_lite::OriginConsumer) -> anyhow::Result<()> {
     let client = moq_native::ClientConfig::default().init()?;
-
-    let url = url::Url::parse("http://localhost:4443/anon").unwrap();
-
+    let url = url::Url::parse(relay_url)?;
     let session = client.with_publish(origin).connect(url).await?;
-
     session.closed().await.map_err(Into::into)
 }
 
 async fn run_heartbeat_broadcast(origin: moq_lite::OriginProducer) -> anyhow::Result<()> {
     let mut broadcast = moq_lite::Broadcast::produce();
-
     let mut track = broadcast.create_track(moq_lite::Track::new("heartbeat"))?;
-
     origin.publish_broadcast("heartbeat", broadcast.consume());
-
     let mut group = track.append_group()?;
-
     group.write_frame(bytes::Bytes::from_static(b"heartbeat"))?;
-
     group.finish()?;
-
     Ok(())
 }

@@ -3,12 +3,19 @@ use serde::Deserialize;
 #[derive(Deserialize, Debug, Clone)]
 pub struct Config {
     pub relay: RelayConfig,
+    pub bridge: BridgeConfig,
     pub video: VideoConfig,
+    pub pose: PoseConfig,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct RelayConfig {
     pub url: String,
+}
+
+#[derive(Deserialize, Debug, Clone)]
+pub struct BridgeConfig {
+    pub bind: String,
 }
 
 #[derive(Deserialize, Debug, Clone)]
@@ -19,7 +26,7 @@ pub struct VideoConfig {
     pub bittrate: u32,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug, Clone)]
 pub struct PoseConfig {
     pub hz: u32,
     pub viewer_id: String,
