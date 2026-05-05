@@ -1,33 +1,28 @@
-
-
 mod bridge;
-use bridge::{bridge::run_bridge};
-mod controls; 
+use bridge::{bridge::run_bridge, config::Config};
+mod controls;
 mod video;
-
 
 use controls::run_pose_broadcast;
 use video::run_video_broadcast;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    moq_native::Log::new(tracing::Level::DEBUG).init();
+    let config = moq_native::Log::new(tracing::Level::DEBUG).init();
 
     let origin = moq_lite::Origin::produce();
 
     tokio::spawn(run_heartbeat_broadcast(origin.clone()));
 
+    let config = Config::load()?;
     tokio::select! {
         res = run_session(origin.consume()) => res,
-        res = run_video_broadcast(origin.clone()) => res,
-        res = run_pose_broadcast("local", origin) => res,
-        res = run_bridge("0.0.0.0:9000", "http://localhost:4443/anon") => res,
+        res = run_video_broadcast(origin.clone(), config.clone()) => res,
+        res = run_pose_broadcast("local", origin.clone()) => res,
+        res = run_bridge("0.0.0.0:9000", origin, config) => res,
     }
-    
 }
 
-
 async fn run_session(origin: moq_lite::OriginConsumer) -> anyhow::Result<()> {
-
     let client = moq_native::ClientConfig::default().init()?;
 
     let url = url::Url::parse("http://localhost:4443/anon").unwrap();
@@ -37,9 +32,7 @@ async fn run_session(origin: moq_lite::OriginConsumer) -> anyhow::Result<()> {
     session.closed().await.map_err(Into::into)
 }
 
-
 async fn run_heartbeat_broadcast(origin: moq_lite::OriginProducer) -> anyhow::Result<()> {
-
     let mut broadcast = moq_lite::Broadcast::produce();
 
     let mut track = broadcast.create_track(moq_lite::Track::new("heartbeat"))?;
@@ -53,5 +46,4 @@ async fn run_heartbeat_broadcast(origin: moq_lite::OriginProducer) -> anyhow::Re
     group.finish()?;
 
     Ok(())
-
 }
