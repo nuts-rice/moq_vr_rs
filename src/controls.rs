@@ -37,7 +37,7 @@ pub async fn run_pose_broadcast(
     let mut t = 0.0;
     loop {
         let elapsed_us = start.elapsed().as_micros() as u64;
-        let ts = Timestamp::from_micros(elapsed_us)?;
+        let ts = Timestamp::from_millis(elapsed_us)?;
         let frame = synthetic_pose_frame(ts.as_millis() as u64, t);
         let payload = Bytes::from(bincode::serialize(&frame)?);
         producer.write(Frame {

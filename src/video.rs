@@ -1,4 +1,4 @@
-use crate::bridge::config::Config;
+use crate::config::Config;
 use bytes::Bytes;
 use hang::container::{Frame, OrderedProducer};
 use openh264::{
@@ -27,7 +27,7 @@ pub async fn run_video_broadcast(
     config: Config,
 ) -> anyhow::Result<()> {
     let encoder_config = EncoderConfig::new()
-        .bitrate(BitRate::from_bps(config.video.bittrate))
+        .bitrate(BitRate::from_bps(config.video.bitrate))
         .max_frame_rate(FrameRate::from_hz(config.video.fps as f32))
         .complexity(Complexity::Low)
         .intra_frame_period(IntraFramePeriod::from_num_frames(config.video.fps.into()));
@@ -88,7 +88,7 @@ fn setup_track(
             framerate: Some(config.video.fps.into()),
             display_ratio_width: None,
             display_ratio_height: None,
-            bitrate: Some(config.video.bittrate.into()),
+            bitrate: Some(config.video.bitrate.into()),
             optimize_for_latency: Some(true),
             container: hang::catalog::Container::Legacy,
             jitter: None,

@@ -23,7 +23,7 @@ pub struct VideoConfig {
     pub width: u32,
     pub height: u32,
     pub fps: u32,
-    pub bittrate: u32,
+    pub bitrate: u32,
 }
 
 #[derive(Deserialize, Debug, Clone)]

@@ -1,4 +1,4 @@
-use crate::bridge::config::Config;
+use crate::config::Config;
 use bytes::Bytes;
 use futures_util::{SinkExt, StreamExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -66,24 +66,35 @@ async fn handle_device(
 
     let mut video_broadcast = None;
     let mut pose_broadcast = None;
-    while video_broadcast.is_none() || pose_broadcast.is_none() {
-        let Some((path, broadcast)) = announcements.announced().await else {
-            anyhow::bail!("relay disconnected before broadcasts arrived");
-        };
-        match path.as_str() {
-            "" => video_broadcast = broadcast,
-            "pose/local" => pose_broadcast = broadcast,
-            _ => {}
-        }
-    }
+  let timeout = tokio::time::sleep(std::time::Duration::from_secs(30));
+  tokio::pin!(timeout);
+  while video_broadcast.is_none() || pose_broadcast.is_none() {
+      tokio::select! {
+          _ = &mut timeout => {
+              anyhow::bail!("timeout waiting for broadcasts");
+          }
+          announcement = announcements.announced() => {
+              if let Some((path, broadcast)) = announcement {
+                  match path.as_str() {
+                      "" => video_broadcast = Some(broadcast),
+                      "pose/local" => pose_broadcast = Some(broadcast),
+                      _ => {}
+                  }
+              } else {
+                  anyhow::bail!("relay disconnected before broadcasts arrived");
+              }
+          }
+      }
+  }
+let mut video_track = video_broadcast
+      .flatten()
+      .ok_or_else(|| anyhow::anyhow!("video broadcast unavailable"))?
+      .subscribe_track(&moq_lite::Track::new("video"))?;
 
-    let mut video_track = video_broadcast
-        .unwrap()
-        .subscribe_track(&moq_lite::Track::new("video"))?;
-    let mut pose_track = pose_broadcast
-        .unwrap()
-        .subscribe_track(&moq_lite::Track::new("pose"))?;
-
+  let mut pose_track = pose_broadcast
+      .flatten()
+      .ok_or_else(|| anyhow::anyhow!("pose/local broadcast unavailable"))?
+      .subscribe_track(&moq_lite::Track::new("pose"))?;
     loop {
         tokio::select! {
             frame = video_track.read_frame() => {
