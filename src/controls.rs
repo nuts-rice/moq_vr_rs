@@ -33,38 +33,12 @@ pub async fn run_pose_broadcast(
     let group_window = Timestamp::from_millis(100)?;
     let mut producer = OrderedProducer::new(track).with_max_group_duration(group_window);
     let frame_dur = Duration::from_secs_f64(1.0 / hz as f64);
-    let start = std::time::Instant::now();
-    let mut t = 0.0;
     tokio::task::spawn_blocking(move || pose_loop(producer, frame_dur)).await??;
     Ok(())
 }
 
-fn synthetic_pose_frame(ts_us: u64, t: f64) -> PoseFrame {
-    let head_y = 1.7 + 0.05 * (t * 1.0).sin() as f32;
-    let yaw = (t * 0.2) as f32;
-    let head = Pose {
-        pos: [0.0, head_y, 0.0],
-        rot: [0.0, (yaw / 2.0).sin(), 0.0, (yaw / 2.0).cos()],
-    };
-    let a = (t * 0.5) as f32;
-    let left_hand = Pose {
-        pos: [-0.4 + 0.1 * a.cos(), 1.2, -0.3 + 0.1 * a.sin()],
-        rot: [0.0, 0.0, 0.0, 1.0],
-    };
-    let right_hand = Pose {
-        pos: [0.4 + 0.1 * a.cos(), 1.2, -0.3 + 0.1 * a.sin()],
-        rot: [0.0, 0.0, 0.0, 1.0],
-    };
-    PoseFrame {
-        ts: ts_us,
-        head,
-        left_hand,
-        right_hand,
-    }
-}
-
 fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Result<()> {
-    let entry = xr::Entry::linked();
+    let entry = unsafe { xr::Entry::load()? };
     let extensions = entry.enumerate_extensions()?;
     let headless = extensions.mnd_headless;
     let mut enabled_exts = xr::ExtensionSet::default();
@@ -135,7 +109,7 @@ fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Resu
         }
         session.sync_actions(&[(&action_set).into()])?;
         let now = xr::Time::from_nanos(start.elapsed().as_nanos() as i64);
-        let head_loc = stage.locate(&view_space, now)?;
+        let head_loc = view_space.locate(&stage, now)?;
         let left_loc = left_space.locate(&stage, now)?;
         let right_loc = right_space.locate(&stage, now)?;
         let elapsed_us = start.elapsed().as_micros() as u64;
