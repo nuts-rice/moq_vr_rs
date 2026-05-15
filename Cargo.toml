@@ -14,7 +14,7 @@ moq-lite = { version = "0.15.15", features = ["serde"] }
 moq-media = "0.0.1"
 moq-native = "0.13.13"
 openh264 = "0.9.3"
-openxr = { version = "0.21.1", features = ["load"] }
+openxr = { version = "0.21.1", features = ["loaded"] }
 serde = { version = "1.0.228", features = ["derive"] }
 tokio = { version = "1.52.1", features = ["rt-multi-thread", "tokio-macros"] }
 tokio-tungstenite = "0.29.0"

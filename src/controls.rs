@@ -31,7 +31,7 @@ pub async fn run_pose_broadcast(
     origin.publish_broadcast(format!("pose/{viewer_id}"), broadcast.consume());
 
     let group_window = Timestamp::from_millis(100)?;
-    let mut producer = OrderedProducer::new(track).with_max_group_duration(group_window);
+    let producer = OrderedProducer::new(track).with_max_group_duration(group_window);
     let frame_dur = Duration::from_secs_f64(1.0 / hz as f64);
     tokio::task::spawn_blocking(move || pose_loop(producer, frame_dur)).await??;
     Ok(())
@@ -53,7 +53,7 @@ fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Resu
         &[],
     )?;
     let system = instance.system(xr::FormFactor::HEAD_MOUNTED_DISPLAY)?;
-    let (session, mut frame_wait, mut frame_stream) = if headless {
+    let session = if headless {
         unsafe {
             instance.create_session::<xr::Headless>(system, &xr::headless::SessionCreateInfo {})?
         }
@@ -62,7 +62,6 @@ fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Resu
     };
     let (mut event_storage, mut session_state) =
         (xr::EventDataBuffer::new(), xr::SessionState::IDLE);
-    session.begin(xr::ViewConfigurationType::PRIMARY_STEREO)?;
     let action_set = instance.create_action_set("pose", "Pose", 0)?;
     let left_grip = action_set.create_action::<xr::Posef>("left_grip", "Left Grip", &[])?;
     let right_grip = action_set.create_action::<xr::Posef>("right_grip", "Right Grip", &[])?;
@@ -79,17 +78,19 @@ fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Resu
             ),
         ],
     )?;
-    session.attach_action_sets(&[&action_set])?;
+    session.0.attach_action_sets(&[&action_set])?;
     let right_space = right_grip
-        .create_space(&session, xr::Path::NULL, xr::Posef::IDENTITY)
+        .create_space(&session.0, xr::Path::NULL, xr::Posef::IDENTITY)
         .unwrap();
     let left_space = left_grip
-        .create_space(&session, xr::Path::NULL, xr::Posef::IDENTITY)
+        .create_space(&session.0, xr::Path::NULL, xr::Posef::IDENTITY)
         .unwrap();
     let stage = session
+        .0
         .create_reference_space(xr::ReferenceSpaceType::STAGE, xr::Posef::IDENTITY)
         .unwrap();
     let view_space = session
+        .0
         .create_reference_space(xr::ReferenceSpaceType::VIEW, xr::Posef::IDENTITY)
         .unwrap();
     let start = std::time::Instant::now();
@@ -98,6 +99,9 @@ fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Resu
             match event {
                 xr::Event::SessionStateChanged(e) => {
                     session_state = e.state();
+                    if session_state == xr::SessionState::READY {
+                        session.0.begin(xr::ViewConfigurationType::PRIMARY_STEREO)?;
+                    }
                     println!("Session state changed: {:?}", session_state);
                 }
                 _ => {}
@@ -107,7 +111,7 @@ fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Resu
             std::thread::sleep(Duration::from_millis(100));
             continue;
         }
-        session.sync_actions(&[(&action_set).into()])?;
+        session.0.sync_actions(&[(&action_set).into()])?;
         let now = xr::Time::from_nanos(start.elapsed().as_nanos() as i64);
         let head_loc = view_space.locate(&stage, now)?;
         let left_loc = left_space.locate(&stage, now)?;
