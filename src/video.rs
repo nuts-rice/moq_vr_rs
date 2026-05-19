@@ -1,6 +1,5 @@
 use crate::config::Config;
 use bytes::Bytes;
-use hang::container::{Frame, OrderedProducer};
 use openh264::{
     OpenH264API, Timestamp as EncTimestamp,
     encoder::{
@@ -35,11 +34,12 @@ pub async fn run_video_broadcast(
     let mut broadcast = moq_lite::Broadcast::produce();
     let track = setup_track(&mut broadcast, &config)?;
     origin.publish_broadcast("", broadcast.consume());
-    let mut producer = OrderedProducer::new(track);
+    let mut track = track;
     let mut encoder = Encoder::with_api_config(OpenH264API::from_source(), encoder_config)?;
     let frame_dur = std::time::Duration::from_millis(1000 / config.video.fps as u64);
     let start = std::time::Instant::now();
     let mut frame_idx = 0;
+    let mut current_group: Option<moq_lite::GroupProducer> = None;
     loop {
         let yuv = synthetic_frame(
             config.video.width as usize,
@@ -50,14 +50,14 @@ pub async fn run_video_broadcast(
         let bitstream = encoder.encode_at(&yuv, EncTimestamp::from_millis(elapsed_ms))?;
         let is_keyframe = matches!(bitstream.frame_type(), FrameType::IDR | FrameType::I);
         if is_keyframe {
-            producer.keyframe()?;
+            if let Some(mut g) = current_group.take() {
+                g.finish()?;
+            }
+            current_group = Some(track.append_group()?);
         }
-        let ts = hang::container::Timestamp::from_millis(elapsed_ms)?;
-        let payload = Bytes::from(bitstream.to_vec());
-        producer.write(Frame {
-            timestamp: ts,
-            payload: payload.into(),
-        })?;
+        if let Some(group) = &mut current_group {
+            group.write_frame(Bytes::from(bitstream.to_vec()))?;
+        }
         frame_idx += 1;
         tokio::time::sleep(frame_dur).await;
     }
