@@ -17,7 +17,11 @@ pub async fn run_bridge(
     // Subscribe: pull video + pose/local from relay
     let sub_origin = moq_lite::Origin::produce();
     let announcements = sub_origin.consume();
-    let client = moq_native::ClientConfig::default().init()?;
+    let mut cfg = moq_native::ClientConfig::default();
+    if config.relay.disable_tls_verify {
+        cfg.tls.disable_verify = Some(true);
+    }
+    let client = cfg.init()?;
     let url = url::Url::parse(&config.relay.url)?;
     let session = client.with_consume(sub_origin).connect(url).await?;
     tokio::spawn(async move {

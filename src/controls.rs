@@ -1,5 +1,4 @@
 use bytes::Bytes;
-use hang::container::{Frame, OrderedProducer, Timestamp};
 use openxr as xr;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
@@ -31,18 +30,16 @@ pub async fn run_pose_broadcast(
     })?;
     origin.publish_broadcast(format!("pose/{viewer_id}"), broadcast.consume());
 
-    let group_window = Timestamp::from_millis(100)?;
-    let producer = OrderedProducer::new(track).with_max_group_duration(group_window);
     let frame_dur = Duration::from_secs_f64(1.0 / hz as f64);
     if synthetic {
-        tokio::task::spawn_blocking(move || synthetic_pose_loop(producer, frame_dur)).await??;
+        tokio::task::spawn_blocking(move || synthetic_pose_loop(track, frame_dur)).await??;
     } else {
-        tokio::task::spawn_blocking(move || pose_loop(producer, frame_dur)).await??;
+        tokio::task::spawn_blocking(move || pose_loop(track, frame_dur)).await??;
     }
     Ok(())
 }
 
-fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Result<()> {
+fn pose_loop(mut track: moq_lite::TrackProducer, frame_dur: Duration) -> anyhow::Result<()> {
     let entry = unsafe { xr::Entry::load()? };
     let extensions = entry.enumerate_extensions()?;
     let headless = extensions.mnd_headless;
@@ -122,28 +119,24 @@ fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Resu
         let left_loc = left_space.locate(&stage, now)?;
         let right_loc = right_space.locate(&stage, now)?;
         let elapsed_us = start.elapsed().as_micros() as u64;
-        let ts = Timestamp::from_micros(elapsed_us)?;
         let frame = PoseFrame {
             ts: elapsed_us,
             head: xr_pose_to_pose(&head_loc.pose),
             left_hand: xr_pose_to_pose(&left_loc.pose),
             right_hand: xr_pose_to_pose(&right_loc.pose),
         };
-
-        producer.write(Frame {
-            timestamp: ts,
-            payload: serde_json::to_vec(&frame)?.into(),
-        })?;
+        let mut group = track.append_group()?;
+        group.write_frame(Bytes::from(serde_json::to_vec(&frame)?))?;
+        group.finish()?;
         std::thread::sleep(frame_dur);
     }
 }
 
-fn synthetic_pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Result<()> {
+fn synthetic_pose_loop(mut track: moq_lite::TrackProducer, frame_dur: Duration) -> anyhow::Result<()> {
     let start = std::time::Instant::now();
     loop {
         let elapsed_us = start.elapsed().as_micros() as u64;
         let t = elapsed_us as f32 / 1_000_000.0;
-        let ts = Timestamp::from_micros(elapsed_us)?;
         let frame = PoseFrame {
             ts: elapsed_us,
             head: Pose {
@@ -159,10 +152,9 @@ fn synthetic_pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> an
                 rot: [0.0, 0.0, 0.0, 1.0],
             },
         };
-        producer.write(Frame {
-            timestamp: ts,
-            payload: Bytes::from(serde_json::to_vec(&frame)?).into(),
-        })?;
+        let mut group = track.append_group()?;
+        group.write_frame(Bytes::from(serde_json::to_vec(&frame)?))?;
+        group.finish()?;
         std::thread::sleep(frame_dur);
     }
 }

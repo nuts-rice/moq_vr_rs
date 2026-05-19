@@ -11,6 +11,7 @@ pub struct Config {
 #[derive(Deserialize, Debug, Clone)]
 pub struct RelayConfig {
     pub url: String,
+    pub disable_tls_verify: bool,
 }
 
 #[derive(Deserialize, Debug, Clone)]
