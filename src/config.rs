@@ -30,6 +30,7 @@ pub struct VideoConfig {
 pub struct PoseConfig {
     pub hz: u32,
     pub viewer_id: String,
+    pub synthetic: bool,
 }
 
 impl Config {

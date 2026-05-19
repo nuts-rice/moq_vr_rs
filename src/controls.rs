@@ -22,6 +22,7 @@ pub async fn run_pose_broadcast(
     viewer_id: &str,
     origin: moq_lite::OriginProducer,
     hz: u32,
+    synthetic: bool,
 ) -> anyhow::Result<()> {
     let mut broadcast = moq_lite::Broadcast::produce();
     let track = broadcast.create_track(moq_lite::Track {
@@ -33,7 +34,11 @@ pub async fn run_pose_broadcast(
     let group_window = Timestamp::from_millis(100)?;
     let producer = OrderedProducer::new(track).with_max_group_duration(group_window);
     let frame_dur = Duration::from_secs_f64(1.0 / hz as f64);
-    tokio::task::spawn_blocking(move || pose_loop(producer, frame_dur)).await??;
+    if synthetic {
+        tokio::task::spawn_blocking(move || synthetic_pose_loop(producer, frame_dur)).await??;
+    } else {
+        tokio::task::spawn_blocking(move || pose_loop(producer, frame_dur)).await??;
+    }
     Ok(())
 }
 
@@ -127,7 +132,36 @@ fn pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Resu
 
         producer.write(Frame {
             timestamp: ts,
-            payload: Bytes::from(bincode::serialize(&frame)?).into(),
+            payload: serde_json::to_vec(&frame)?.into(),
+        })?;
+        std::thread::sleep(frame_dur);
+    }
+}
+
+fn synthetic_pose_loop(mut producer: OrderedProducer, frame_dur: Duration) -> anyhow::Result<()> {
+    let start = std::time::Instant::now();
+    loop {
+        let elapsed_us = start.elapsed().as_micros() as u64;
+        let t = elapsed_us as f32 / 1_000_000.0;
+        let ts = Timestamp::from_micros(elapsed_us)?;
+        let frame = PoseFrame {
+            ts: elapsed_us,
+            head: Pose {
+                pos: [0.0, 1.6 + (t * 0.5).sin() * 0.05, 0.0],
+                rot: [0.0, 0.0, 0.0, 1.0],
+            },
+            left_hand: Pose {
+                pos: [-0.3, 1.2 + (t * 1.0).sin() * 0.1, 0.3],
+                rot: [0.0, 0.0, 0.0, 1.0],
+            },
+            right_hand: Pose {
+                pos: [0.3, 1.2 + (t * 1.3).sin() * 0.1, 0.3],
+                rot: [0.0, 0.0, 0.0, 1.0],
+            },
+        };
+        producer.write(Frame {
+            timestamp: ts,
+            payload: Bytes::from(serde_json::to_vec(&frame)?).into(),
         })?;
         std::thread::sleep(frame_dur);
     }

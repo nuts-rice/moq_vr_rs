@@ -18,12 +18,13 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(run_heartbeat_broadcast(origin.clone()));
     let relay_url = config.relay.url.clone();
     let viewer_id = config.pose.viewer_id.clone();
+    let synthetic = config.pose.synthetic;
     let bind = config.bridge.bind.clone();
 
     tokio::select! {
         res = run_session(&relay_url, origin.consume()) => res,
         res = run_video_broadcast(origin.clone(), config.clone()) => res,
-        res = run_pose_broadcast(&viewer_id, origin.clone(), config.pose.hz) => res,
+        res = run_pose_broadcast(&viewer_id, origin.clone(), config.pose.hz, synthetic) => res,
         res = run_bridge(&bind, origin, config) => res,
     }
 }
